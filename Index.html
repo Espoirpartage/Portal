@@ -399,11 +399,9 @@ async function seedIfEmpty(){
     idx = r ? JSON.parse(r.value) : [];
   }catch(e){ idx = []; }
   if(idx.length === 0){
-    const m1 = {code:'MF001-2026', nom:'JEAN-BAPTISTE', prenom:'Junior Alex', fonction:'Trésorier Adjoint', date:'1 juin 2026', photo:null};
-    const m2 = {code:'MF002-2026', nom:'CASTIN', prenom:'Louis Vladimir', fonction:'Président-fondateur', date:'12 août 2026', photo:SEED_PHOTO};
+    const m1 = {code:'MF001-2026', nom:'CASTIN', prenom:'Louis Vladimir', fonction:'Président-fondateur', date:'1 juin 2026', photo:SEED_PHOTO};
     await window.storage.set('members:MF001-2026', JSON.stringify(m1), true);
-    await window.storage.set('members:MF002-2026', JSON.stringify(m2), true);
-    await window.storage.set('members:index', JSON.stringify(['MF001-2026','MF002-2026']), true);
+    await window.storage.set('members:index', JSON.stringify(['MF001-2026']), true);
   }
 }
 
