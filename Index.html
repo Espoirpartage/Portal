@@ -316,6 +316,10 @@ h2.title{
         <input type="text" id="f-fonction" placeholder="ex. Président-fondateur" />
       </div>
       <div class="field">
+        <label>Membre depuis</label>
+        <input type="text" id="f-member-since" value="1 juin 2026" placeholder="ex. 1 juin 2026" />
+      </div>
+      <div class="field">
         <label>Photo du membre</label>
         <div class="upload-box" id="upload-box">
           <span id="upload-label">Cliquez pour choisir une photo (optionnel)</span>
@@ -417,13 +421,26 @@ async function getMember(code){
   }catch(e){ return null; }
 }
 
+// Mise à niveau des cartes déjà créées : l'adhésion est fixée au 1er juin 2026,
+// tandis que leur ancienne date devient la date de création.
+async function migrateLegacyDates(){
+  const idx = await getIndex();
+  await Promise.all(idx.map(async code => {
+    const member = await getMember(code);
+    if(!member || (member.memberSince && member.creationDate)) return;
+    member.memberSince = member.memberSince || '1 juin 2026';
+    member.creationDate = member.creationDate || member.date || '1 juin 2026';
+    await window.storage.set('members:'+code, JSON.stringify(member), true);
+  }));
+}
+
 function memberCardHTML(m){
   const statut = /fondateur/i.test(m.fonction) ? 'MEMBRE FONDATEUR' : 'MEMBRE OEPPS';
   const photoHTML = m.photo
     ? `<img class="mcard-photo" src="${m.photo}" alt="">`
     : `<div class="mcard-photo placeholder">PHOTO DU<br>MEMBRE</div>`;
   return `
-    <div class="mcard" data-date="${m.date.toUpperCase()}">
+    <div class="mcard" data-date="${(m.creationDate || m.date || '').toUpperCase()}">
       <div class="mcard-header">
         <img src="${LOGO}" class="mcard-logo" alt="OEPPS">
         <div class="mcard-orgname">
@@ -445,7 +462,7 @@ function memberCardHTML(m){
       <div class="mcard-foot">
         <div>
           <div class="mcard-code">${m.code}</div>
-          <div class="mcard-date">Membre depuis le ${m.date}</div>
+          <div class="mcard-date">Membre depuis le ${m.memberSince || m.date || '1 juin 2026'}</div>
         </div>
         <div class="barcode" id="bc-${m.code}"></div>
       </div>
@@ -526,13 +543,18 @@ async function refreshMembersList(){
         return showToast('Ce numéro est déjà attribué à un autre membre.');
       }
 
-      const requestedDate = prompt('Date de création :', member.date);
-      if(requestedDate === null) return;
-      const newDate = requestedDate.trim();
-      if(!newDate) return showToast('La date ne peut pas être vide.');
+      const requestedMemberSince = prompt('Membre depuis :', member.memberSince || member.date || '1 juin 2026');
+      if(requestedMemberSince === null) return;
+      const memberSince = requestedMemberSince.trim();
+      if(!memberSince) return showToast('La date d’adhésion ne peut pas être vide.');
+      const requestedCreationDate = prompt('Date de création de la carte :', member.creationDate || member.date || '');
+      if(requestedCreationDate === null) return;
+      const creationDate = requestedCreationDate.trim();
+      if(!creationDate) return showToast('La date de création ne peut pas être vide.');
 
       member.code = newCode;
-      member.date = newDate;
+      member.memberSince = memberSince;
+      member.creationDate = creationDate;
       await window.storage.set('members:'+newCode, JSON.stringify(member), true);
       if(newCode !== oldCode) await window.storage.delete('members:'+oldCode, true);
       const idx2 = await getIndex();
@@ -597,20 +619,22 @@ document.getElementById('add-btn').addEventListener('click', async ()=>{
   const prenom = document.getElementById('f-prenom').value.trim();
   const nom = document.getElementById('f-nom').value.trim();
   const fonction = document.getElementById('f-fonction').value.trim();
-  if(!prenom || !nom || !fonction){
-    showToast('Veuillez remplir prénom, nom et fonction.');
+  const memberSince = document.getElementById('f-member-since').value.trim();
+  if(!prenom || !nom || !fonction || !memberSince){
+    showToast('Veuillez remplir prénom, nom, fonction et la date d’adhésion.');
     return;
   }
   const idx = await getIndex();
   const code = nextMemberCode(idx);
   const today = new Date().toLocaleDateString('fr-FR', {day:'numeric', month:'long', year:'numeric'});
-  const member = {code, nom: nom.toUpperCase(), prenom, fonction, date: today, photo: pendingPhoto};
+  const member = {code, nom: nom.toUpperCase(), prenom, fonction, memberSince, creationDate: today, photo: pendingPhoto};
   await window.storage.set('members:'+code, JSON.stringify(member), true);
   await window.storage.set('members:index', JSON.stringify([...idx, code]), true);
 
   document.getElementById('f-prenom').value='';
   document.getElementById('f-nom').value='';
   document.getElementById('f-fonction').value='';
+  document.getElementById('f-member-since').value='1 juin 2026';
   pendingPhoto = null;
   document.getElementById('upload-box').innerHTML = `<span id="upload-label">Cliquez pour choisir une photo (optionnel)</span><input type="file" id="f-photo" accept="image/*">`;
   document.getElementById('f-photo').addEventListener('change', handlePhotoChange);
@@ -642,6 +666,7 @@ document.getElementById('search-input').addEventListener('keydown', (e)=>{ if(e.
 
 (async function init(){
   await seedIfEmpty();
+  await migrateLegacyDates();
   await refreshMembersList();
 })();
 </script>
