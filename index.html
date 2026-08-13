@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -316,16 +315,16 @@ h2.title{
       <div class="grid-2">
         <div class="field">
           <label>Prénom</label>
-          <input type="text" id="f-prenom" placeholder="ex. Louis Vladimir" />
+          <input type="text" id="f-prenom" placeholder="ex. Joe" />
         </div>
         <div class="field">
           <label>Nom</label>
-          <input type="text" id="f-nom" placeholder="ex. Castin" />
+          <input type="text" id="f-nom" placeholder="ex. Doe" />
         </div>
       </div>
       <div class="field">
         <label>Fonction</label>
-        <input type="text" id="f-fonction" placeholder="ex. Président-fondateur" />
+        <input type="text" id="f-fonction" placeholder="ex. PF" />
       </div>
       <div class="field">
         <label>Membre depuis</label>
@@ -339,7 +338,7 @@ h2.title{
         </div>
       </div>
       <button class="btn btn-gold" id="add-btn" style="margin-top:6px;">Générer la carte et ajouter</button>
-      <p class="note">Un numéro de membre unique (ex. MF003-2026) et un code-barres sont générés automatiquement à l'ajout.</p>
+      <p class="note">Un numéro de membre unique (ex. MF000-2026) et un code-barres sont générés automatiquement à l'ajout.</p>
     </div>
 
     <h2 class="title" style="margin-bottom:14px;">Membres enregistrés</h2>
@@ -355,11 +354,11 @@ h2.title{
 // les règles RLS de Supabase protègent les modifications.
 const SUPABASE_URL = 'https://ajummnuakxtdcrqaytvm.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_t-mvlfG1sSh0xzHGTGSJyg_9pKWReYk';
-const supabase = window.supabase
+const supabaseClient = window.supabase
   ? window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY)
   : null;
 function ensureSupabase(){
-  if(!supabase) throw new Error('La connexion Supabase n’a pas pu être chargée. Vérifiez votre connexion Internet, puis rechargez la page.');
+  if(!supabaseClient) throw new Error('La connexion Supabase n’a pas pu être chargée. Vérifiez votre connexion Internet, puis rechargez la page.');
 }
 
 function toDatabaseMember(m){
@@ -372,7 +371,7 @@ function fromDatabaseMember(m){
 }
 async function requireAdmin(){
   ensureSupabase();
-  const { data:{ session } } = await supabase.auth.getSession();
+  const { data:{ session } } = await supabaseClient.auth.getSession();
   if(!session) throw new Error('Connectez-vous comme administrateur avant de modifier les membres.');
 }
 // Adaptateur conservant le reste du portail simple, mais toutes les données vont dans Supabase.
@@ -380,12 +379,12 @@ window.storage = {
   async get(key){
     ensureSupabase();
     if(key === 'members:index'){
-      const { data, error } = await supabase.from('members').select('code').order('created_at');
+      const { data, error } = await supabaseClient.from('members').select('code').order('created_at');
       if(error) throw error;
       return { value: JSON.stringify(data.map(m => m.code)) };
     }
     const code = key.replace(/^members:/, '');
-    const { data, error } = await supabase.from('members').select('*').eq('code', code).maybeSingle();
+    const { data, error } = await supabaseClient.from('members').select('*').eq('code', code).maybeSingle();
     if(error) throw error;
     return data ? { value: JSON.stringify(fromDatabaseMember(data)) } : null;
   },
@@ -394,7 +393,7 @@ window.storage = {
     ensureSupabase();
     await requireAdmin();
     const member = JSON.parse(value);
-    const { error } = await supabase.from('members').upsert(toDatabaseMember(member), { onConflict:'code' });
+    const { error } = await supabaseClient.from('members').upsert(toDatabaseMember(member), { onConflict:'code' });
     if(error) throw error;
   },
   async delete(key){
@@ -402,7 +401,7 @@ window.storage = {
     ensureSupabase();
     await requireAdmin();
     const code = key.replace(/^members:/, '');
-    const { error } = await supabase.from('members').delete().eq('code', code);
+    const { error } = await supabaseClient.from('members').delete().eq('code', code);
     if(error) throw error;
   }
 };
@@ -461,11 +460,9 @@ async function seedIfEmpty(){
     idx = r ? JSON.parse(r.value) : [];
   }catch(e){ idx = []; }
   if(idx.length === 0){
-    const m1 = {code:'MF001-2026', nom:'JEAN-BAPTISTE', prenom:'Junior Alex', fonction:'Trésorier Adjoint', date:'1 juin 2026', photo:null};
-    const m2 = {code:'MF002-2026', nom:'CASTIN', prenom:'Louis Vladimir', fonction:'Président-fondateur', date:'12 août 2026', photo:SEED_PHOTO};
-    await window.storage.set('members:MF001-2026', JSON.stringify(m1), true);
-    await window.storage.set('members:MF002-2026', JSON.stringify(m2), true);
-    await window.storage.set('members:index', JSON.stringify(['MF001-2026','MF002-2026']), true);
+    const m1 = {code:'MF000-2026', nom:'JOE', prenom:'Doe', fonction:'PF', date:'1 juin 2026', photo:null};
+    await window.storage.set('members:MF000-2026', JSON.stringify(m1), true);
+    await window.storage.set('members:index', JSON.stringify(['MF000-2026']), true);
   }
 }
 
@@ -677,11 +674,11 @@ function handlePhotoChange(e){
 document.getElementById('f-photo').addEventListener('change', handlePhotoChange);
 
 async function refreshAdminStatus(){
-  if(!supabase){
+  if(!supabaseClient){
     document.getElementById('admin-status').textContent = 'Connexion Supabase indisponible. Vérifiez Internet puis rechargez cette page.';
     return;
   }
-  const { data:{ session } } = await supabase.auth.getSession();
+  const { data:{ session } } = await supabaseClient.auth.getSession();
   const status = document.getElementById('admin-status');
   const loginBtn = document.getElementById('admin-login-btn');
   const logoutBtn = document.getElementById('admin-logout-btn');
@@ -694,18 +691,18 @@ async function refreshAdminStatus(){
   }
 }
 document.getElementById('admin-login-btn').addEventListener('click', async ()=>{
-  if(!supabase) return showToast('Connexion Supabase indisponible. Rechargez la page avec Internet.');
+  if(!supabaseClient) return showToast('Connexion Supabase indisponible. Rechargez la page avec Internet.');
   const email = document.getElementById('admin-email').value.trim();
   const password = document.getElementById('admin-password').value;
   if(!email || !password) return showToast('Saisissez l’e-mail et le mot de passe administrateur.');
-  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
   if(error) return showToast('Connexion impossible : '+error.message);
   document.getElementById('admin-password').value = '';
   await refreshAdminStatus(); showToast('Connexion administrateur réussie.');
 });
 document.getElementById('admin-logout-btn').addEventListener('click', async ()=>{
-  if(!supabase) return;
-  await supabase.auth.signOut(); await refreshAdminStatus(); showToast('Déconnexion effectuée.');
+  if(!supabaseClient) return;
+  await supabaseClient.auth.signOut(); await refreshAdminStatus(); showToast('Déconnexion effectuée.');
 });
 
 document.getElementById('add-btn').addEventListener('click', async ()=>{
