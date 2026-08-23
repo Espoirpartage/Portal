@@ -260,6 +260,43 @@ h2.title{
 
 /* Version verticale (portrait) de la carte à générer */
 .mcard{max-width:520px;min-height:790px;}.mcard-header{padding:25px 30px 16px;justify-content:center;text-align:center;}.mcard-logo{width:72px;height:72px;}.mcard-orgtitle{font-size:34px;letter-spacing:3px;}.mcard-orgtag{font-size:10px;}.mcard-band{margin:0 28px;font-size:20px;padding:11px 6px;}.mcard-body{padding:30px 42px 22px;display:block;}.mcard-photo{display:block;width:155px;height:200px;margin:0 auto 26px;}.mcard-info dl{grid-template-columns:1fr;gap:5px;}.mcard-info dt{font-size:17px;margin-top:10px;}.mcard-info dd{font-size:19px;}.mcard-foot{padding:0 42px 16px;display:block;}.mcard-code{font-size:20px;}.barcode{margin-top:12px;height:48px;}.mcard-sigs{padding:0 42px 22px;justify-content:space-between;gap:16px;}.mcard-sig-label{font-size:11px;}.mcard-sig-name{font-size:10px;}.mcard::after{padding:21px 30px;font-size:16px;text-align:center;}
+
+/* Impression du badge */
+#print-area{display:none;}
+@media print{
+  @page{ size:auto; margin:6mm; }
+  html, body{ height:auto !important; }
+  body *{visibility:hidden;}
+  #print-area, #print-area *{visibility:visible;}
+  #print-area{display:block !important;position:absolute;top:0;left:0;width:100%;margin:0;padding:0;}
+  #print-area .mcard{
+    box-shadow:none;margin:0 auto;page-break-inside:avoid;break-inside:avoid;
+  }
+  /* Force le navigateur à imprimer les couleurs et fonds tels qu'affichés à l'écran. */
+  *{
+    -webkit-print-color-adjust:exact !important;
+    print-color-adjust:exact !important;
+    color-adjust:exact !important;
+  }
+  .toast{display:none !important;}
+}
+.mr-print{border:1px solid var(--line);background:white;color:var(--navy);cursor:pointer;font-size:12px;font-weight:700;padding:6px 9px;border-radius:6px;}
+.mr-print:hover{border-color:var(--navy);background:var(--paper);}
+.btn-print-badge{margin-top:14px;}
+
+/* Fenêtre modale d'édition */
+.modal-overlay{
+  display:none;position:fixed;inset:0;background:rgba(10,20,35,0.55);z-index:200;
+  align-items:center;justify-content:center;padding:20px;
+}
+.modal-overlay.show{display:flex;}
+.modal-box{
+  background:white;border-radius:16px;padding:28px;max-width:460px;width:100%;
+  max-height:88vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.3);
+}
+.modal-box h3{margin:0 0 4px;font-family:'Fraunces',serif;color:var(--navy-deep);}
+.modal-box .note{margin-bottom:18px;}
+.modal-actions{display:flex;gap:10px;margin-top:18px;justify-content:flex-end;}
 </style>
 </head>
 <body>
@@ -295,6 +332,7 @@ h2.title{
         <div>Entrez un numéro de membre pour afficher sa fiche.</div>
       </div>
     </div>
+    <button class="btn btn-outline btn-print-badge" id="portal-print-btn" type="button" style="display:none;">Imprimer ce badge</button>
   </div>
 
   <div class="section" id="section-request">
@@ -367,6 +405,26 @@ h2.title{
 
 </div>
 <div class="toast" id="toast"></div>
+<div id="print-area"></div>
+
+<div class="modal-overlay" id="edit-modal">
+  <div class="modal-box">
+    <h3>Modifier le membre</h3>
+    <p class="note">Vous pouvez aussi changer le numéro d'identifiant (ID) du membre. Assurez-vous que le nouvel ID est unique.</p>
+    <div class="field"><label>Numéro de membre (ID)</label><input type="text" id="edit-code"></div>
+    <div class="grid-2">
+      <div class="field"><label>Prénom</label><input type="text" id="edit-prenom"></div>
+      <div class="field"><label>Nom</label><input type="text" id="edit-nom"></div>
+    </div>
+    <div class="field"><label>Fonction</label><input type="text" id="edit-fonction"></div>
+    <div class="field"><label>Membre depuis</label><input type="text" id="edit-member-since"></div>
+    <div class="field"><label>Date de création de la carte</label><input type="text" id="edit-creation-date"></div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" id="edit-cancel-btn" type="button">Annuler</button>
+      <button class="btn btn-gold" id="edit-save-btn" type="button">Enregistrer</button>
+    </div>
+  </div>
+</div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
@@ -393,6 +451,15 @@ async function requireAdmin(){
   ensureSupabase();
   const { data:{ session } } = await supabaseClient.auth.getSession();
   if(!session) throw new Error('Connectez-vous comme administrateur avant de modifier les membres.');
+}
+// Met à jour un membre existant, y compris son numéro d'identifiant (code),
+// en ciblant la ligne par son ancien code.
+async function updateMember(oldCode, member){
+  ensureSupabase();
+  await requireAdmin();
+  const payload = toDatabaseMember(member);
+  const { error } = await supabaseClient.from('members').update(payload).eq('code', oldCode);
+  if(error) throw error;
 }
 // Adaptateur conservant le reste du portail simple, mais toutes les données vont dans Supabase.
 window.storage = {
@@ -562,9 +629,20 @@ function memberCardHTML(m){
   `;
 }
 
+let lastDisplayedMember = null;
+
+function printMemberBadge(m){
+  if(!m) return;
+  const area = document.getElementById('print-area');
+  area.innerHTML = memberCardHTML(m);
+  renderBarcode(area.querySelector('.barcode'), m.code);
+  setTimeout(()=>{ window.print(); }, 60);
+}
+
 async function doSearch(){
   const raw = document.getElementById('search-input').value.trim().toUpperCase();
   const resultEl = document.getElementById('portal-result');
+  const printBtn = document.getElementById('portal-print-btn');
   if(!raw){ return; }
   const m = await getMember(raw);
   if(!m){
@@ -572,11 +650,19 @@ async function doSearch(){
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5l5 5M14.5 9.5l-5 5"/></svg>
       <div>Aucun membre trouvé pour « ${raw} ».</div>
     </div>`;
+    lastDisplayedMember = null;
+    printBtn.style.display = 'none';
     return;
   }
   resultEl.innerHTML = memberCardHTML(m);
   renderBarcode(document.getElementById('bc-'+m.code), m.code);
+  lastDisplayedMember = m;
+  printBtn.style.display = 'inline-block';
 }
+
+document.getElementById('portal-print-btn').addEventListener('click', ()=>{
+  printMemberBadge(lastDisplayedMember);
+});
 
 async function refreshMembersList(){
   const listEl = document.getElementById('members-list');
@@ -594,10 +680,19 @@ async function refreshMembersList(){
         <div class="mr-fn">${m.fonction}</div>
       </div>
       <div class="mr-code">${m.code}</div>
-      <button class="mr-edit" data-code="${m.code}" title="Modifier les dates">Modifier</button>
+      <button class="mr-print" data-code="${m.code}" title="Imprimer le badge">Imprimer</button>
+      <button class="mr-edit" data-code="${m.code}" title="Modifier le membre">Modifier</button>
       <button class="mr-del" data-code="${m.code}" title="Supprimer">×</button>
     </div>
   `).join('');
+  listEl.querySelectorAll('.mr-print').forEach(btn=>{
+    btn.addEventListener('click', async (e)=>{
+      const code = e.target.dataset.code;
+      const member = await getMember(code);
+      if(!member) return showToast('Membre introuvable.');
+      printMemberBadge(member);
+    });
+  });
   listEl.querySelectorAll('.mr-del').forEach(btn=>{
     btn.addEventListener('click', async (e)=>{
       const code = e.target.dataset.code;
@@ -614,26 +709,72 @@ async function refreshMembersList(){
   });
   listEl.querySelectorAll('.mr-edit').forEach(btn=>{
     btn.addEventListener('click', async (e)=>{
-      const oldCode = e.target.dataset.code;
-      const member = await getMember(oldCode);
+      const code = e.target.dataset.code;
+      const member = await getMember(code);
       if(!member) return showToast('Membre introuvable.');
-
-      const requestedMemberSince = prompt('Membre depuis :', member.memberSince || member.date || '1 juin 2026');
-      if(requestedMemberSince === null) return;
-      const memberSince = requestedMemberSince.trim();
-      if(!memberSince) return showToast('La date d’adhésion ne peut pas être vide.');
-      const requestedCreationDate = prompt('Date de création de la carte :', member.creationDate || member.date || '');
-      if(requestedCreationDate === null) return;
-      const creationDate = requestedCreationDate.trim();
-      if(!creationDate) return showToast('La date de création ne peut pas être vide.');
-
-      member.memberSince = memberSince;
-      member.creationDate = creationDate;
-      await window.storage.set('members:'+oldCode, JSON.stringify(member), true);
-      showToast(`Membre modifié : ${oldCode}`);
-      refreshMembersList();
+      openEditModal(code, member);
     });
   });
+}
+
+let editingOldCode = null;
+
+function openEditModal(oldCode, member){
+  editingOldCode = oldCode;
+  document.getElementById('edit-code').value = oldCode;
+  document.getElementById('edit-prenom').value = member.prenom || '';
+  document.getElementById('edit-nom').value = member.nom || '';
+  document.getElementById('edit-fonction').value = member.fonction || '';
+  document.getElementById('edit-member-since').value = member.memberSince || member.date || '1 juin 2026';
+  document.getElementById('edit-creation-date').value = member.creationDate || member.date || '';
+  document.getElementById('edit-modal').classList.add('show');
+}
+
+function closeEditModal(){
+  document.getElementById('edit-modal').classList.remove('show');
+  editingOldCode = null;
+}
+
+document.getElementById('edit-cancel-btn').addEventListener('click', closeEditModal);
+document.getElementById('edit-modal').addEventListener('click', (e)=>{
+  if(e.target.id === 'edit-modal') closeEditModal();
+});
+
+document.getElementById('edit-save-btn').addEventListener('click', async ()=>{
+  if(!editingOldCode) return;
+  const newCode = document.getElementById('edit-code').value.trim().toUpperCase();
+  const prenom = document.getElementById('edit-prenom').value.trim();
+  const nom = document.getElementById('edit-nom').value.trim();
+  const fonction = document.getElementById('edit-fonction').value.trim();
+  const memberSince = document.getElementById('edit-member-since').value.trim();
+  const creationDate = document.getElementById('edit-creation-date').value.trim();
+
+  if(!newCode || !prenom || !nom || !fonction || !memberSince || !creationDate){
+    return showToast('Veuillez remplir tous les champs.');
+  }
+
+  try{
+    const existing = await getMember(oldCodeIfDifferent(newCode, editingOldCode));
+    if(newCode !== editingOldCode && existing){
+      return showToast(`L’identifiant ${newCode} est déjà utilisé par un autre membre.`);
+    }
+    const original = await getMember(editingOldCode);
+    const member = {
+      ...(original || {}),
+      code: newCode, prenom, nom: nom.toUpperCase(), fonction, memberSince, creationDate
+    };
+    await updateMember(editingOldCode, member);
+    showToast(newCode !== editingOldCode ? `Membre modifié — nouvel ID : ${newCode}` : `Membre modifié : ${newCode}`);
+    closeEditModal();
+    await refreshMembersList();
+  }catch(err){
+    showToast(err.message || 'Modification impossible.');
+  }
+});
+
+// Ne vérifie l’unicité que si le code a réellement changé.
+function oldCodeIfDifferent(newCode, oldCode){
+  return newCode !== oldCode ? newCode : '__self__';
 }
 
 function nextMemberCode(idx){
@@ -813,6 +954,8 @@ document.getElementById('add-btn').addEventListener('click', async ()=>{
   // Affiche immédiatement la carte créée dans l'onglet Portail.
   document.getElementById('portal-result').innerHTML = memberCardHTML(member);
   renderBarcode(document.getElementById('bc-'+member.code), member.code);
+  lastDisplayedMember = member;
+  document.getElementById('portal-print-btn').style.display = 'inline-block';
   document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active', t.dataset.tab === 'portal'));
   document.querySelectorAll('.section').forEach(s=>s.classList.toggle('active', s.id === 'section-portal'));
   showToast(`Membre ajouté — carte générée : ${code}`);
