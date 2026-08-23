@@ -480,7 +480,7 @@ async function seedIfEmpty(){
     idx = r ? JSON.parse(r.value) : [];
   }catch(e){ idx = []; }
   if(idx.length === 0){
-    const m1 = {code:'MF000-2026', nom:'John', prenom:'Doe', fonction:'Membre-fondateur', date:'1 juin 2026', photo:null};
+    const m1 = {code:'MF000-2026', nom:'John', prenom:'Doe', fonction:'Membre-Fondateur', date:'1 juin 2026', photo:null};
     const m2 = {code:'MF001-2026', nom:'CASTIN', prenom:'Louis Vladimir', fonction:'Président-fondateur', date:'12 août 2026', photo:SEED_PHOTO};
     await window.storage.set('members:MF000-2026', JSON.stringify(m1), true);
     await window.storage.set('members:MF001-2026', JSON.stringify(m2), true);
@@ -602,11 +602,14 @@ async function refreshMembersList(){
     btn.addEventListener('click', async (e)=>{
       const code = e.target.dataset.code;
       if(!confirm(`Supprimer le membre ${code} ?`)) return;
-      await window.storage.delete('members:'+code, true);
-      const idx2 = await getIndex();
-      await window.storage.set('members:index', JSON.stringify(idx2.filter(c=>c!==code)), true);
-      showToast(`Membre ${code} supprimé.`);
-      refreshMembersList();
+      try{
+        const { error } = await supabaseClient.rpc('delete_member',{p_code:code});
+        if(error) throw error;
+        showToast(`Membre ${code} supprimé.`);
+        await refreshMembersList();
+      }catch(err){
+        showToast(err.message || 'Suppression impossible.');
+      }
     });
   });
   listEl.querySelectorAll('.mr-edit').forEach(btn=>{
@@ -727,6 +730,7 @@ async function refreshRequestsList(){
     ${r.photo ? `<img src="${r.photo}">` : `<div class="ph">${r.prenom[0]}${r.nom[0]}</div>`}
     <div class="mr-info"><div class="mr-name">${r.prenom} ${r.nom}</div><div class="mr-fn">${r.fonction} · Depuis ${r.member_since}</div></div>
     <button class="btn btn-gold approve-request" data-id="${r.id}" style="padding:9px 12px;">Approuver</button>
+    <button class="btn btn-outline decline-request" data-id="${r.id}" style="padding:9px 12px;color:var(--danger);">Décliner</button>
   </div>`).join('');
   list.querySelectorAll('.approve-request').forEach(btn=>btn.addEventListener('click', async e=>{
     try{
@@ -734,6 +738,14 @@ async function refreshRequestsList(){
       if(error) throw error;
       showToast(`Badge approuvé : ${data.code}`); await refreshRequestsList(); await refreshMembersList();
     }catch(err){ showToast(err.message || 'Approbation impossible.'); }
+  }));
+  list.querySelectorAll('.decline-request').forEach(btn=>btn.addEventListener('click', async e=>{
+    if(!confirm('Décliner cette demande ? Aucun numéro de membre ne sera généré.')) return;
+    try{
+      const { error } = await supabaseClient.rpc('decline_member_request',{p_request_id:e.target.dataset.id});
+      if(error) throw error;
+      showToast('Demande déclinée.'); await refreshRequestsList();
+    }catch(err){ showToast(err.message || 'Refus impossible.'); }
   }));
 }
 
