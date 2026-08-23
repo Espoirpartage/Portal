@@ -286,7 +286,7 @@ h2.title{
     <p class="eyebrow">Vérification</p>
     <h2 class="title">Rechercher une carte de membre</h2>
     <div class="search-row">
-      <input type="text" id="search-input" placeholder="Entrez le numéro de membre — ex. MF002-2026" />
+      <input type="text" id="search-input" placeholder="Entrez le numéro de membre — ex. MF000-2026" />
       <button class="btn btn-primary" id="search-btn">Rechercher</button>
     </div>
     <div id="portal-result">
@@ -480,11 +480,11 @@ async function seedIfEmpty(){
     idx = r ? JSON.parse(r.value) : [];
   }catch(e){ idx = []; }
   if(idx.length === 0){
-    const m1 = {code:'MF000-2026', nom:'John', prenom:'Doe', fonction:'Membre-Fondateur', date:'1 juin 2026', photo:null};
-    const m2 = {code:'MF001-2026', nom:'CASTIN', prenom:'Louis Vladimir', fonction:'Président-fondateur', date:'12 août 2026', photo:SEED_PHOTO};
-    await window.storage.set('members:MF000-2026', JSON.stringify(m1), true);
-    await window.storage.set('members:MF001-2026', JSON.stringify(m2), true);
-    await window.storage.set('members:index', JSON.stringify(['MF000-2026','MF001-2026']), true);
+    const m1 = {code:'MF001-2026', nom:'JEAN-BAPTISTE', prenom:'Junior Alex', fonction:'Trésorier Adjoint', date:'1 juin 2026', photo:null};
+    const m2 = {code:'MF002-2026', nom:'CASTIN', prenom:'Louis Vladimir', fonction:'Président-fondateur', date:'12 août 2026', photo:SEED_PHOTO};
+    await window.storage.set('members:MF001-2026', JSON.stringify(m1), true);
+    await window.storage.set('members:MF002-2026', JSON.stringify(m2), true);
+    await window.storage.set('members:index', JSON.stringify(['MF001-2026','MF002-2026']), true);
   }
 }
 
