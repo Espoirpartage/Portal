@@ -264,6 +264,46 @@ h2.title{
 /* Version verticale (portrait) de la carte à générer */
 .mcard{max-width:520px;min-height:790px;}.mcard-header{padding:25px 30px 16px;justify-content:center;text-align:center;}.mcard-logo{width:72px;height:72px;}.mcard-orgtitle{font-size:34px;letter-spacing:3px;}.mcard-orgtag{font-size:10px;}.mcard-band{margin:0 28px;font-size:20px;padding:11px 6px;}.mcard-body{padding:30px 42px 22px;display:block;}.mcard-photo{display:block;width:155px;height:200px;margin:0 auto 26px;}.mcard-info dl{grid-template-columns:1fr;gap:5px;}.mcard-info dt{font-size:17px;margin-top:10px;}.mcard-info dd{font-size:19px;}.mcard-foot{padding:0 42px 16px;display:block;}.mcard-code{font-size:20px;}.barcode{margin-top:12px;height:48px;}.mcard-sigs{padding:0 42px 22px;justify-content:space-between;gap:16px;}.mcard-sig-label{font-size:11px;}.mcard-sig-name{font-size:10px;}.mcard::after{padding:21px 30px;font-size:16px;text-align:center;}
 
+/* Ruban « MEMBRE FONDATEUR » et bande « DATE DE CRÉATION » façon badge physique — carte toujours verticale. */
+.mcard-band{
+  position:relative;
+  margin:0 40px;
+  padding:13px 20px;
+  background:linear-gradient(180deg,#e7c76e 0%, #c99f39 55%, #a97f2c 100%);
+  box-shadow:0 3px 8px rgba(0,0,0,0.18);
+  clip-path:polygon(0 0,100% 0,100% 72%,92% 100%,8% 100%,0 72%);
+  font-weight:800;
+}
+.mcard-band::before,
+.mcard-band::after{
+  content:'';
+  position:absolute;
+  top:0;
+  width:18px;
+  height:100%;
+  background:#8f6c26;
+  z-index:-1;
+}
+.mcard-band::before{
+  left:-14px;
+  clip-path:polygon(0 0,100% 0,100% 100%,0 58%);
+}
+.mcard-band::after{
+  right:-14px;
+  clip-path:polygon(0 0,100% 0,100% 58%,0 100%);
+}
+
+.mcard::after{
+  display:block;
+  width:87%;
+  margin:24px 0 0;
+  padding:15px 18px 15px 34px;
+  background:linear-gradient(90deg,#173f70,#0f3760);
+  border-radius:0 999px 999px 0;
+  text-align:left;
+  font-size:15px;
+}
+
 /* Impression du badge */
 #print-area{display:none;}
 @media print{
