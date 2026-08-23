@@ -236,6 +236,9 @@ h2.title{
 .member-row .mr-del:hover{opacity:1;}
 .member-row .mr-edit{border:1px solid var(--line);background:white;color:var(--navy);cursor:pointer;font-size:12px;font-weight:700;padding:6px 9px;border-radius:6px;}
 .member-row .mr-edit:hover{border-color:var(--navy);background:var(--paper);}
+.search-match{cursor:pointer;transition:border-color .15s,background .15s;}
+.search-match:hover{border-color:var(--navy);background:var(--paper);}
+.search-matches-title{font-size:13px;font-weight:600;color:var(--muted);margin:0 0 12px;}
 
 .toast{
   position:fixed;bottom:24px;left:50%;transform:translateX(-50%);
@@ -330,7 +333,7 @@ h2.title{
     <p class="eyebrow">Vérification</p>
     <h2 class="title">Rechercher une carte de membre</h2>
     <div class="search-row">
-      <input type="text" id="search-input" placeholder="Entrez le numéro de membre — ex. MF000-2026" />
+      <input type="text" id="search-input" placeholder="Nom, prénom ou numéro de membre — ex. Marcus Blanc ou MF002-2026" />
       <button class="btn btn-primary" id="search-btn">Rechercher</button>
     </div>
     <div id="portal-result">
@@ -646,25 +649,87 @@ function printMemberBadge(m){
   setTimeout(()=>{ window.print(); }, 60);
 }
 
-async function doSearch(){
-  const raw = document.getElementById('search-input').value.trim().toUpperCase();
+// Retire les accents et met en minuscules pour une comparaison insensible à la casse/accents.
+function normalizeText(str){
+  return (str || '').toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+}
+
+function showSingleResult(m){
   const resultEl = document.getElementById('portal-result');
   const printBtn = document.getElementById('portal-print-btn');
-  if(!raw){ return; }
-  const m = await getMember(raw);
-  if(!m){
-    resultEl.innerHTML = `<div class="empty-state">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5l5 5M14.5 9.5l-5 5"/></svg>
-      <div>Aucun membre trouvé pour « ${raw} ».</div>
-    </div>`;
-    lastDisplayedMember = null;
-    printBtn.style.display = 'none';
-    return;
-  }
   resultEl.innerHTML = memberCardHTML(m);
   renderBarcode(document.getElementById('bc-'+m.code), m.code);
   lastDisplayedMember = m;
   printBtn.style.display = 'inline-block';
+}
+
+function showNoResult(query){
+  const resultEl = document.getElementById('portal-result');
+  const printBtn = document.getElementById('portal-print-btn');
+  resultEl.innerHTML = `<div class="empty-state">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5l5 5M14.5 9.5l-5 5"/></svg>
+    <div>Aucun membre trouvé pour « ${query} ».</div>
+  </div>`;
+  lastDisplayedMember = null;
+  printBtn.style.display = 'none';
+}
+
+function showMultipleMatches(matches){
+  const resultEl = document.getElementById('portal-result');
+  const printBtn = document.getElementById('portal-print-btn');
+  lastDisplayedMember = null;
+  printBtn.style.display = 'none';
+  resultEl.innerHTML = `
+    <p class="search-matches-title">${matches.length} membres correspondent — cliquez sur un nom pour afficher sa carte :</p>
+    ${matches.map(mem => `
+      <div class="member-row search-match" data-code="${mem.code}">
+        ${mem.photo ? `<img src="${mem.photo}">` : `<div class="ph">${(mem.prenom||'?')[0]}${(mem.nom||'?')[0]}</div>`}
+        <div class="mr-info">
+          <div class="mr-name">${mem.prenom} ${mem.nom}</div>
+          <div class="mr-fn">${mem.fonction}</div>
+        </div>
+        <div class="mr-code">${mem.code}</div>
+      </div>
+    `).join('')}
+  `;
+  resultEl.querySelectorAll('.search-match').forEach(row=>{
+    row.addEventListener('click', async ()=>{
+      const mem = await getMember(row.dataset.code);
+      if(mem) showSingleResult(mem);
+    });
+  });
+}
+
+async function doSearch(){
+  const raw = document.getElementById('search-input').value.trim();
+  if(!raw){ return; }
+
+  // 1) Correspondance exacte par numéro de membre (ex. MF002-2026).
+  const byCode = await getMember(raw.toUpperCase());
+  if(byCode){
+    showSingleResult(byCode);
+    return;
+  }
+
+  // 2) Sinon, recherche par nom / prénom (insensible à la casse et aux accents),
+  //    et aussi en repli sur une correspondance partielle du numéro de membre.
+  const idx = await getIndex();
+  const members = (await Promise.all(idx.map(getMember))).filter(Boolean);
+  const needle = normalizeText(raw);
+  const matches = members.filter(mem=>{
+    const nameForward = normalizeText(`${mem.prenom} ${mem.nom}`);
+    const nameReversed = normalizeText(`${mem.nom} ${mem.prenom}`);
+    const code = normalizeText(mem.code);
+    return nameForward.includes(needle) || nameReversed.includes(needle) || code.includes(needle);
+  });
+
+  if(matches.length === 0){
+    showNoResult(raw);
+  }else if(matches.length === 1){
+    showSingleResult(matches[0]);
+  }else{
+    showMultipleMatches(matches);
+  }
 }
 
 document.getElementById('portal-print-btn').addEventListener('click', ()=>{
